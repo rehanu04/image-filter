@@ -3,6 +3,9 @@ from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 import segno
 import io
 import base64
+import re
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.formatters import TextFormatter
 
 # Set up Streamlit page config
 st.set_page_config(
@@ -98,7 +101,7 @@ st.markdown("<div class='subtitle'>Refined workspace combining advanced image ma
 st.sidebar.markdown("### 🗺️ Navigation")
 app_mode = st.sidebar.radio(
     "Choose Workspace Mode:",
-    ["🎨 Advanced Image Studio", "🔮 Universal QR Engine"]
+    ["🎨 Advanced Image Studio", "🔮 Universal QR Engine", "📺 Automated Video Transcript Engine"]
 )
 
 # ----------------------------------------------------
@@ -472,3 +475,86 @@ elif app_mode == "🔮 Universal QR Engine":
     else:
         if not run_generation:
             st.info("💡 Standby: Please configure one of the pipelines above to activate the compilation canvas.")
+
+# ----------------------------------------------------
+# MODE C: AUTOMATED VIDEO TRANSCRIPT ENGINE
+# ----------------------------------------------------
+elif app_mode == "📺 Automated Video Transcript Engine":
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📺 Transcript Settings")
+    
+    st.markdown("### 📺 Automated Video Transcript Engine")
+    st.write("Retrieve clean, human-readable text transcripts from YouTube videos using their URLs or 11-character Video IDs.")
+    
+    # URL Input Pipeline
+    video_input = st.text_input(
+        "Enter YouTube Video URL or Video ID:",
+        placeholder="e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ or dQw4w9WgXcQ"
+    )
+    
+    if video_input:
+        video_id = None
+        video_input_clean = video_input.strip()
+        
+        # Check for 11-character video ID directly
+        if len(video_input_clean) == 11 and re.match(r"^[a-zA-Z0-9_-]{11}$", video_input_clean):
+            video_id = video_input_clean
+        else:
+            # Match standard, shorts, mobile, embed link variations
+            match = re.search(r"(?:v=|\/v\/|embed\/|shorts\/|youtu\.be\/|\/embed\/|\/v=|^)([a-zA-Z0-9_-]{11})", video_input_clean)
+            if match:
+                video_id = match.group(1)
+                
+        if video_id:
+            st.info(f"🔍 Isolated Video ID: `{video_id}`")
+            
+            # Rigid try-except context shield block
+            try:
+                with st.spinner("Extracting transcript records from YouTube api..."):
+                    raw_transcript = YouTubeTranscriptApi.get_transcript(video_id)
+                    
+                    # Formatting Layer
+                    formatter = TextFormatter()
+                    clean_transcript = formatter.format_transcript(raw_transcript)
+                
+                st.success("🎉 Transcript successfully compiled!")
+                
+                # UI Presentation Matrix: Metrics
+                word_count = len(clean_transcript.split())
+                char_length = len(clean_transcript)
+                
+                m_col1, m_col2 = st.columns(2)
+                with m_col1:
+                    st.metric("Total Word Count", f"{word_count:,} words")
+                with m_col2:
+                    st.metric("Character Length Profile", f"{char_length:,} characters")
+                
+                # Presentation inside scrollable UI text box
+                st.markdown("#### 📝 Compiled Transcript Text")
+                st.text_area(
+                    label="Plain text output:",
+                    value=clean_transcript,
+                    height=350,
+                    disabled=False
+                )
+                
+                # Download Action Engine
+                st.download_button(
+                    label="📥 Export Transcript as Text File (.txt)",
+                    data=clean_transcript,
+                    file_name=f"transcript_{video_id}.txt",
+                    mime="text/plain"
+                )
+                
+            except Exception as transcript_error:
+                st.markdown(
+                    f"<div class='custom-warning'>⚠️ <b>Extraction Engine Error:</b> "
+                    f"Could not retrieve video transcript. This video may not have captions enabled, "
+                    f"contains age restrictions, or the Video ID is invalid. <br/><br/>"
+                    f"<i>Details: {str(transcript_error)}</i></div>", 
+                    unsafe_allow_html=True
+                )
+        else:
+            st.error("❌ Invalid Input: Could not extract a valid 11-character Video ID from the link.")
+    else:
+        st.info("💡 Standby: Please provide a YouTube Video URL or Video ID to activate the extraction engine.")
